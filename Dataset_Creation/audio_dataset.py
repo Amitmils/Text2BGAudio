@@ -15,6 +15,12 @@ class AudioDataset(Dataset):
         if isinstance(data, str):
             data = torch.load(data)
         self.data = data
+        self.label_dist = {}
+        for i in self.data:
+            if i.label not in self.label_dist:
+                self.label_dist[i.label] = 1
+            else:
+                self.label_dist[i.label] += 1
 
     def __len__(self):
         return len(self.data)
