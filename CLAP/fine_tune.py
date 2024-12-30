@@ -52,11 +52,18 @@ def info_nce_loss(text_embeddings,audio_embeddings,labels,temperature=0.5):
 
     return loss
 
+
+
 if __name__ == '__main__':
     freeze_support()
-    model_name = "laion/clap-htsat-fused"
+    model_name = "laion/larger_clap_music"
     processor = ClapProcessor.from_pretrained(model_name)
     model = ClapModel.from_pretrained(model_name)
+    
+    # Switch BatchNorm layers to evaluation mode during training
+    for layer in model.modules():
+        if isinstance(layer, torch.nn.BatchNorm2d):
+            layer.eval()
     # Freeze most layers except projection layers
     for param in model.parameters():
         param.requires_grad = False
@@ -79,7 +86,7 @@ if __name__ == '__main__':
     resampler = T.Resample(orig_freq=8000, new_freq=new_sr)
 
     for epoch in range(10):
-        model.eval()
+        model.train()
         total_loss = 0
         
         for batch in data_loader: # Replace with your DataLoader
@@ -87,8 +94,6 @@ if __name__ == '__main__':
             text = batch[1]
             inputs = processor(text=list(text), audios=audio.numpy(), return_tensors="pt", sampling_rate = new_sr,padding=True)
             # Print the shapes of inputs for debugging
-            print(f"Text shape: {inputs['input_ids'].shape}")
-            print(f"Audio shape: {inputs['input_features'].shape}")
             inputs = {k: v.to(DEVICE) for k, v in inputs.items()}
             outputs = model(**inputs)
             text_embeds = outputs.text_embeds
