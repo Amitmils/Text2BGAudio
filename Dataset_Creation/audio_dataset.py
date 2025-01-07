@@ -21,7 +21,7 @@ class AudioDataset(Dataset):
     def __init__(self, data : Union[List[audio_segment],str]):
         super().__init__()
         if isinstance(data, str):
-            data = torch.load(data)
+            data = torch.load(data,weights_only=False)
         self.org_data = data
         self.data = [audio_segment(*i) for i in data if len(i) == 4]
         self.label_dist = {}
