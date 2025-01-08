@@ -18,7 +18,7 @@ class audio_segment:
 
 
 class AudioDataset(Dataset):
-    def __init__(self, data : Union[List[audio_segment],str]):
+    def __init__(self, data : Union[List[tuple],str]):
         super().__init__()
         if isinstance(data, str):
             data = torch.load(data,weights_only=False)

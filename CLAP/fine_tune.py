@@ -79,10 +79,6 @@ if __name__ == "__main__":
     processor = ClapProcessor.from_pretrained(model_name)
     model = ClapModel.from_pretrained(model_name).to(DEVICE)
 
-    # # Switch BatchNorm layers to evaluation mode during training
-    # for layer in model.modules():
-    #     if isinstance(layer, torch.nn.BatchNorm2d):
-    #         layer.eval()
     # Freeze most layers except projection layers
     for param in model.parameters():
         param.requires_grad = False
@@ -94,26 +90,39 @@ if __name__ == "__main__":
 
     new_sr = 48000
     epochs = 400
-    resampler = T.Resample(orig_freq=8000, new_freq=new_sr)
 
-    music_dataset = audio_dataset.AudioDataset(r"_Data\Music\music_dataset_train_size7507.pt")
+    print("Loading Data...")
+    train_data, val_data, test_data = list(torch.load(r"_Data\Music\Music Data New\music_dataset_test_Music Data New_tr3204_val398_te405.pt", weights_only=False).values())
+    print("Data Loaded!")
+    train_dataset = audio_dataset.AudioDataset(train_data)
+    val_dataset = audio_dataset.AudioDataset(val_data)
+    test_dataset = audio_dataset.AudioDataset(test_data)
+
     batch_sizes = [32]  # 32
     lrs = [1e-5]  # 1e-7
-    runs_summary = dict()
+    runs_summary = {"train": dict(), "val": dict()}
     for batch_size in batch_sizes:
         for lr in lrs:
-            data_loader = DataLoader(music_dataset, batch_size=batch_size, shuffle=True)
+            train_data_loader = DataLoader(
+                train_dataset, batch_size=batch_size, shuffle=True
+            )
+            val_data_loader = DataLoader(
+                val_dataset, batch_size=batch_size, shuffle=True
+            )
+
             optimizer = optim.AdamW(
                 list(model.text_projection.parameters())
                 + list(model.audio_projection.parameters()),
                 lr=lr,
             )
-            loss_per_epoch = []
+            train_loss_per_epoch = []
+            val_loss_per_epoch = []
+
             for epoch in range(epochs):
                 model.train()
                 total_loss = 0
                 print(f"Epoch {epoch+1}")
-                for batch in tqdm(data_loader, desc="Batches"):
+                for batch in tqdm(train_data_loader, desc="Train Batches"):
                     audio = batch[0]
                     labels = list(batch[1])
                     inputs = processor(
@@ -134,19 +143,39 @@ if __name__ == "__main__":
                     loss.backward()
                     optimizer.step()
 
-                    if (epoch + 1) % 50 == 0:
-                        torch.save(
-                            {
-                                "model_state_dict": model.state_dict(),
-                                "Loss_Per_Epoch": loss_per_epoch,
-                            },
-                            rf"CLAP\models\clap_fine_tunned_BatchSize_{batch_size}_LR_{lr}_Epochs_{epoch+1}_LOSS_{loss_per_epoch[-1]:.2f}.pt",
-                        )
                     total_loss += loss.item()
+                train_loss_per_epoch.append(total_loss / len(train_data_loader))
+
+                with torch.no_grad():
+                    model.eval()
+                    val_loss = 0
+                    for batch in tqdm(val_data_loader, desc="Validation Batches"):
+                        audio = batch[0]
+                        labels = list(batch[1])
+                        inputs = processor(
+                            text=labels,
+                            audios=audio.numpy(),
+                            return_tensors="pt",
+                            sampling_rate=new_sr,
+                            padding=True,
+                        )
+                        inputs = {k: v.to(DEVICE) for k, v in inputs.items()}
+                        outputs = model(**inputs)
+                        text_embeds = outputs.text_embeds
+                        audio_embeds = outputs.audio_embeds
+
+                        loss = NT_Xent_loss(text_embeds, audio_embeds, labels)
+                        val_loss += loss.item()
+                    val_loss_per_epoch.append(val_loss / len(val_data_loader))
                 print(
-                    f"Batch {batch_size} LR {lr} Epoch {epoch+1}: Loss = {total_loss / len(data_loader)}"
+                    f"Train Loss = {total_loss / len(train_data_loader)} | Validation Loss = {val_loss / len(val_data_loader)}\n"
                 )
-                loss_per_epoch.append(total_loss / len(data_loader))
-            runs_summary[(lr, batch_size)] = loss_per_epoch.copy()
-        for key in runs_summary:
-            print(f"Batch Size: {key[1]} LR: {key[0]} Loss: {runs_summary[key]}")
+                if (epoch + 1) % 50 == 0:
+                    torch.save(
+                        {
+                            "model_state_dict": model.state_dict(),
+                            "train_Loss_Per_Epoch": train_loss_per_epoch,
+                            "val_Loss_Per_Epoch": val_loss_per_epoch,
+                        },
+                        rf"CLAP\models\clap_fine_tunned_BatchSize_{batch_size}_LR_{lr}_Epochs_{epoch+1}_VAL_LOSS_{val_loss_per_epoch[-1]:.2f}.pt",
+                    )
