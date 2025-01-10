@@ -92,7 +92,7 @@ if __name__ == "__main__":
     epochs = 400
 
     print("Loading Data...")
-    train_data, val_data, test_data = list(torch.load(r"_Data\Music\Music Data New\music_dataset_test_Music Data New_tr3204_val398_te405.pt", weights_only=False).values())
+    train_data, val_data, test_data = list(torch.load(r"_Data\Music\Music Data New\music_dataset_fixed_Music Data New_tr3141_val390_te398.pt", weights_only=False).values())
     print("Data Loaded!")
     train_dataset = audio_dataset.AudioDataset(train_data)
     val_dataset = audio_dataset.AudioDataset(val_data)
@@ -177,5 +177,5 @@ if __name__ == "__main__":
                             "train_Loss_Per_Epoch": train_loss_per_epoch,
                             "val_Loss_Per_Epoch": val_loss_per_epoch,
                         },
-                        rf"CLAP\models\clap_fine_tunned_BatchSize_{batch_size}_LR_{lr}_Epochs_{epoch+1}_VAL_LOSS_{val_loss_per_epoch[-1]:.2f}.pt",
+                        rf"CLAP\models\clap_fine_tunned_Fixeed_BatchSize_{batch_size}_LR_{lr}_Epochs_{epoch+1}_VAL_LOSS_{val_loss_per_epoch[-1]:.2f}.pt",
                     )
